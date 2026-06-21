@@ -279,6 +279,91 @@ class LocalJsonAdapter implements DatabaseAdapter {
 }
 
 // ============================================================
+// In-Memory Adapter (Production Fallback without Supabase)
+// ============================================================
+
+class InMemoryAdapter implements DatabaseAdapter {
+  private projects: Project[] = [];
+  private audits: Audit[] = [];
+  private issues: Issue[] = [];
+  private reports: Report[] = [];
+
+  async createProject(data: Omit<Project, "id" | "created_at">): Promise<Project> {
+    const project: Project = {
+      ...data,
+      id: uuidv4(),
+      created_at: new Date().toISOString(),
+    };
+    this.projects.push(project);
+    return project;
+  }
+
+  async getProject(id: string): Promise<Project | null> {
+    return this.projects.find((p) => p.id === id) || null;
+  }
+
+  async listProjects(): Promise<Project[]> {
+    return [...this.projects].sort(
+      (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+    );
+  }
+
+  async createAudit(data: Omit<Audit, "id" | "created_at">): Promise<Audit> {
+    const audit: Audit = {
+      ...data,
+      id: uuidv4(),
+      created_at: new Date().toISOString(),
+    };
+    this.audits.push(audit);
+    return audit;
+  }
+
+  async getAudit(id: string): Promise<Audit | null> {
+    return this.audits.find((a) => a.id === id) || null;
+  }
+
+  async getAuditsByProject(projectId: string): Promise<Audit[]> {
+    return this.audits
+      .filter((a) => a.project_id === projectId)
+      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+  }
+
+  async getLatestAudit(projectId: string): Promise<Audit | null> {
+    const audits = await this.getAuditsByProject(projectId);
+    return audits[0] || null;
+  }
+
+  async createIssues(issues: Omit<Issue, "id">[]): Promise<Issue[]> {
+    const created = issues.map((issue) => ({
+      ...issue,
+      id: uuidv4(),
+    }));
+    this.issues.push(...created);
+    return created;
+  }
+
+  async getIssuesByAudit(auditId: string): Promise<Issue[]> {
+    return this.issues.filter((i) => i.audit_id === auditId);
+  }
+
+  async createReport(data: Omit<Report, "id" | "created_at">): Promise<Report> {
+    const report: Report = {
+      ...data,
+      id: uuidv4(),
+      created_at: new Date().toISOString(),
+    };
+    this.reports.push(report);
+    return report;
+  }
+
+  async getReportsByAudit(auditId: string): Promise<Report[]> {
+    return this.reports
+      .filter((r) => r.audit_id === auditId)
+      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+  }
+}
+
+// ============================================================
 // Factory - returns correct adapter based on env
 // ============================================================
 
@@ -295,8 +380,13 @@ export function getDb(): DatabaseAdapter {
     console.log("[DB] Using Supabase adapter");
     _db = new SupabaseAdapter();
   } else {
-    console.log("[DB] Using local JSON adapter (no Supabase credentials found)");
-    _db = new LocalJsonAdapter();
+    if (process.env.NODE_ENV === "development") {
+      console.log("[DB] Using local JSON adapter (no Supabase credentials found, development mode)");
+      _db = new LocalJsonAdapter();
+    } else {
+      console.log("[DB] Using in-memory adapter (no Supabase credentials found, production mode)");
+      _db = new InMemoryAdapter();
+    }
   }
 
   return _db;

@@ -359,18 +359,24 @@ export async function generatePdfReport(
     }
   }
 
-  // Local File Fallback (writing to public/reports)
-  console.log("[PDF] Falling back to local file storage.");
-  const reportsDir = path.join(process.cwd(), "public", "reports");
-  
-  if (!fs.existsSync(reportsDir)) {
-    fs.mkdirSync(reportsDir, { recursive: true });
+  // Local / In-memory Fallback
+  if (process.env.NODE_ENV === "development") {
+    console.log("[PDF] Falling back to local file storage (development mode).");
+    const reportsDir = path.join(process.cwd(), "public", "reports");
+    
+    if (!fs.existsSync(reportsDir)) {
+      fs.mkdirSync(reportsDir, { recursive: true });
+    }
+
+    const filePath = path.join(reportsDir, filename);
+    fs.writeFileSync(filePath, Buffer.from(pdfBytes));
+
+    const localUrl = `/reports/${filename}`;
+    console.log("[PDF] Local report generated at:", localUrl);
+    return localUrl;
+  } else {
+    console.log("[PDF] Falling back to Base64 Data URL (production mode, no filesystem access).");
+    const base64String = Buffer.from(pdfBytes).toString("base64");
+    return `data:application/pdf;base64,${base64String}`;
   }
-
-  const filePath = path.join(reportsDir, filename);
-  fs.writeFileSync(filePath, Buffer.from(pdfBytes));
-
-  const localUrl = `/reports/${filename}`;
-  console.log("[PDF] Local report generated at:", localUrl);
-  return localUrl;
 }
