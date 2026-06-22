@@ -30,9 +30,20 @@ export default function ReportsPage() {
         const res = await fetch("/api/reports");
         if (res.ok) {
           const data = await res.json();
-          setReports(data);
-          // Sync database reports to localStorage
-          localStorage.setItem("latest_reports", JSON.stringify(data));
+          if (data && data.length > 0) {
+            setReports(data);
+            // Sync database reports to localStorage
+            localStorage.setItem("latest_reports", JSON.stringify(data));
+          } else {
+            // API returned empty array (common in stateless production without database persistence).
+            // Fall back to localStorage reports instead of overwriting them with an empty list.
+            const localData = localStorage.getItem("latest_reports");
+            if (localData) {
+              setReports(JSON.parse(localData));
+            } else {
+              setReports([]);
+            }
+          }
         } else {
           // Fallback to localStorage if API returned an error (e.g. 404 on Vercel without Supabase)
           const localData = localStorage.getItem("latest_reports");

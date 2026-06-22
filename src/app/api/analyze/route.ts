@@ -226,96 +226,132 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      // 12. Generate PDF reports
-      send({ status: "generating_recommendations", progress: 95, message: "Generating reports..." });
-      try {
-        const { generatePdfReport } = await import("@/lib/engines/pdf");
-        const pdfData = {
-          project,
-          audit,
-          seoResult,
-          aeoResult,
-          geoResult,
-          accessResult,
-          recommendations,
-          technologyStack,
-          competitorResult,
-        };
+      // 12. Reconstruct the full analysis result object for client caching/local storage.
+      // Use the actual computed results with their nested details so client-side PDF generation can use them.
+      const fullAnalysisResult = {
+        project,
+        audit,
+        crawlResult: { pages: [], url: project.website_url },
+        seoResult,
+        aeoResult,
+        geoResult,
+        accessResult,
+        recommendations: recommendations.map((r: any, index: number) => ({
+          id: r.id || String(index),
+          problem: r.problem,
+          reason: r.reason,
+          priority: r.priority,
+          impact: r.impact,
+          difficulty: r.difficulty,
+          confidence: r.confidence,
+          expectedGain: r.impact,
+          category: r.category,
+        })),
+        technologyStack: audit.technology_stack || {
+          framework: "Unknown",
+          languages: [],
+          analytics: [],
+          cdns: [],
+          libraries: [],
+          meta: {},
+        },
+        websiteUnderstanding: audit.website_understanding || {},
+        lighthouseScores: audit.lighthouse_scores || {},
+        competitorResult,
+      };
 
-        const generatedReportsList: any[] = [];
+      // 13. Handle report registration and conditional PDF generation
+      send({ status: "generating_recommendations", progress: 95, message: "Generating reports..." });
+      const generatedReportsList: any[] = [];
+      const hasSupabase =
+        process.env.NEXT_PUBLIC_SUPABASE_URL &&
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+      // Determine if server-side PDF generation is viable
+      const shouldGenerateServerPdf =
+        hasSupabase || process.env.NODE_ENV === "development";
+
+      if (shouldGenerateServerPdf) {
+        try {
+          const { generatePdfReport } = await import("@/lib/engines/pdf");
+          const pdfData = {
+            project,
+            audit,
+            seoResult,
+            aeoResult,
+            geoResult,
+            accessResult,
+            recommendations,
+            technologyStack,
+            competitorResult,
+          };
+
+          for (const rType of reports) {
+            try {
+              const reportUrl = await generatePdfReport(pdfData, rType);
+              const createdReport = await db.createReport({
+                audit_id: audit.id,
+                report_type: rType,
+                file_url: reportUrl,
+              });
+              generatedReportsList.push(createdReport);
+            } catch (pdfErr) {
+              console.warn(
+                `[PDF Error] Server-side PDF generation failed for ${rType}. Registering client-side fallback URL.`,
+                pdfErr
+              );
+              const createdReport = await db.createReport({
+                audit_id: audit.id,
+                report_type: rType,
+                file_url: `client-pdf:${rType}`,
+              });
+              generatedReportsList.push(createdReport);
+            }
+          }
+        } catch (err) {
+          console.error("[PDF Engine Error] Failed to import or run PDF engine", err);
+          // Fall back to client-pdf for all requested reports
+          for (const rType of reports) {
+            try {
+              const createdReport = await db.createReport({
+                audit_id: audit.id,
+                report_type: rType,
+                file_url: `client-pdf:${rType}`,
+              });
+              generatedReportsList.push(createdReport);
+            } catch (dbErr) {
+              console.error("[DB Error] Failed to create fallback report entry", dbErr);
+            }
+          }
+        }
+      } else {
+        console.log(
+          "[PDF] Skipping server-side PDF generation (stateless production mode, no Supabase credentials found). Registering client-side fallback URLs directly."
+        );
         for (const rType of reports) {
           try {
-            const reportUrl = await generatePdfReport(pdfData, rType);
-            const createdReport = await db.createReport({
-              audit_id: audit.id,
-              report_type: rType,
-              file_url: reportUrl,
-            });
-            generatedReportsList.push(createdReport);
-          } catch (pdfErr) {
-            console.warn(`[PDF Error] Server-side PDF generation failed for ${rType}. Registering client-side fallback URL.`, pdfErr);
             const createdReport = await db.createReport({
               audit_id: audit.id,
               report_type: rType,
               file_url: `client-pdf:${rType}`,
             });
             generatedReportsList.push(createdReport);
+          } catch (dbErr) {
+            console.error("[DB Error] Failed to create fallback report entry", dbErr);
           }
         }
-        
-        // Reconstruct the full analysis result object for client caching
-        const fullAnalysisResult = {
-          project,
-          audit,
-          crawlResult: { pages: [], url: project.website_url },
-          seoResult: { score: audit.seo_score, issues: [], details: {} },
-          aeoResult: { score: audit.aeo_score, issues: [], details: {} },
-          geoResult: { score: audit.geo_score, issues: [], details: {} },
-          accessResult: { score: audit.access_score, issues: [], details: {} },
-          recommendations: recommendations.map((r: any, index: number) => ({
-            id: r.id || String(index),
-            problem: r.problem,
-            reason: r.reason,
-            priority: r.priority,
-            impact: r.impact,
-            difficulty: r.difficulty,
-            confidence: r.confidence,
-            expectedGain: r.impact,
-            category: r.category,
-          })),
-          technologyStack: audit.technology_stack || {
-            framework: "Unknown",
-            languages: [],
-            analytics: [],
-            cdns: [],
-            libraries: [],
-            meta: {},
-          },
-          websiteUnderstanding: audit.website_understanding || {},
-          lighthouseScores: audit.lighthouse_scores || {},
-        };
-
-        // Complete
-        send({
-          status: "complete",
-          progress: 100,
-          message: "Analysis complete!",
-          projectId: project.id,
-          auditId: audit.id,
-          result: fullAnalysisResult,
-          reports: generatedReportsList,
-        });
-      } catch (err) {
-        console.error("[PDF Engine Error]", err);
-        // Complete even if PDF generation failed
-        send({
-          status: "complete",
-          progress: 100,
-          message: "Analysis complete (with PDF errors)!",
-          projectId: project.id,
-          auditId: audit.id,
-        });
       }
+
+      // Complete - ALWAYS send result and reports!
+      send({
+        status: "complete",
+        progress: 100,
+        message: "Analysis complete!",
+        projectId: project.id,
+        auditId: audit.id,
+        result: fullAnalysisResult,
+        reports: generatedReportsList,
+      });
     } catch (error) {
       console.error("[Analysis Error]", error);
       send({
