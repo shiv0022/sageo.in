@@ -14,6 +14,15 @@ import type { Report } from "@/types";
 export default function ReportsPage() {
   const [reports, setReports] = useState<Report[]>([]);
   const [loading, setLoading] = useState(true);
+  const [analysisResult, setAnalysisResult] = useState<any>(null);
+  const [downloading, setDownloading] = useState<string | null>(null);
+
+  useEffect(() => {
+    const localData = localStorage.getItem("latest_analysis");
+    if (localData) {
+      setAnalysisResult(JSON.parse(localData));
+    }
+  }, []);
 
   useEffect(() => {
     async function loadReports() {
@@ -43,6 +52,32 @@ export default function ReportsPage() {
     }
     loadReports();
   }, []);
+
+  const handleDownload = async (report: Report) => {
+    if (report.file_url.startsWith("client-pdf:")) {
+      if (!analysisResult) {
+        alert("Latest analysis data is missing in your browser. Please run an analysis first.");
+        return;
+      }
+      setDownloading(report.id);
+      try {
+        const { generatePdfReportClient } = await import("@/lib/engines/pdf-client");
+        await generatePdfReportClient(analysisResult, report.report_type as any);
+      } catch (err) {
+        console.error("Failed to generate PDF on client:", err);
+        alert("Failed to generate PDF. Please try again.");
+      } finally {
+        setDownloading(null);
+      }
+    } else {
+      const link = document.createElement("a");
+      link.href = report.file_url;
+      link.download = `report_${report.report_type}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
+  };
 
   const formatDate = (dateStr: string) => {
     return new Date(dateStr).toLocaleDateString("en-US", {
@@ -127,14 +162,18 @@ export default function ReportsPage() {
                     </div>
                   </div>
                 </div>
-                <a
-                  href={report.file_url}
-                  download
-                  className="flex items-center gap-2 px-4 py-2 rounded-lg border border-gray-200 text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors"
+                <button
+                  onClick={() => handleDownload(report)}
+                  disabled={downloading === report.id}
+                  className="flex items-center gap-2 px-4 py-2 rounded-lg border border-gray-200 text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors disabled:opacity-50 cursor-pointer"
                 >
-                  <Download className="w-4 h-4" />
-                  Download
-                </a>
+                  {downloading === report.id ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Download className="w-4 h-4" />
+                  )}
+                  {downloading === report.id ? "Generating..." : "Download"}
+                </button>
               </div>
             ))}
           </div>

@@ -253,7 +253,13 @@ export async function POST(request: NextRequest) {
             });
             generatedReportsList.push(createdReport);
           } catch (pdfErr) {
-            console.error(`[PDF Error] Failed to generate ${rType}:`, pdfErr);
+            console.warn(`[PDF Error] Server-side PDF generation failed for ${rType}. Registering client-side fallback URL.`, pdfErr);
+            const createdReport = await db.createReport({
+              audit_id: audit.id,
+              report_type: rType,
+              file_url: `client-pdf:${rType}`,
+            });
+            generatedReportsList.push(createdReport);
           }
         }
         
