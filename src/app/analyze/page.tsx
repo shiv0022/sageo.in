@@ -155,6 +155,13 @@ function AnalyzeContent() {
                 if (data.message) setStatusMessage(data.message);
                 if (data.analysisId) setAnalysisId(data.analysisId);
                 if (data.status === "complete") {
+                  // Cache results and reports locally for stateless/Vercel compatibility
+                  if (data.result) {
+                    localStorage.setItem("latest_analysis", JSON.stringify(data.result));
+                  }
+                  if (data.reports) {
+                    localStorage.setItem("latest_reports", JSON.stringify(data.reports));
+                  }
                   setTimeout(() => {
                     router.push(
                       `/dashboard?project=${data.projectId || ""}`

@@ -100,9 +100,21 @@ export default function DashboardPage() {
         if (res.ok) {
           const data = await res.json();
           setResult(data);
+          // Sync database data to localStorage
+          localStorage.setItem("latest_analysis", JSON.stringify(data));
+        } else {
+          // Fallback to localStorage if API returned an error (e.g. 404 on Vercel without Supabase)
+          const localData = localStorage.getItem("latest_analysis");
+          if (localData) {
+            setResult(JSON.parse(localData));
+          }
         }
       } catch {
-        // No data yet
+        // Fallback to localStorage on network error
+        const localData = localStorage.getItem("latest_analysis");
+        if (localData) {
+          setResult(JSON.parse(localData));
+        }
       } finally {
         setLoading(false);
       }

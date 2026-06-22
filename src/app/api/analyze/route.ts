@@ -242,30 +242,74 @@ export async function POST(request: NextRequest) {
           competitorResult,
         };
 
+        const generatedReportsList: any[] = [];
         for (const rType of reports) {
           try {
             const reportUrl = await generatePdfReport(pdfData, rType);
-            await db.createReport({
+            const createdReport = await db.createReport({
               audit_id: audit.id,
               report_type: rType,
               file_url: reportUrl,
             });
+            generatedReportsList.push(createdReport);
           } catch (pdfErr) {
             console.error(`[PDF Error] Failed to generate ${rType}:`, pdfErr);
           }
         }
+        
+        // Reconstruct the full analysis result object for client caching
+        const fullAnalysisResult = {
+          project,
+          audit,
+          crawlResult: { pages: [], url: project.website_url },
+          seoResult: { score: audit.seo_score, issues: [], details: {} },
+          aeoResult: { score: audit.aeo_score, issues: [], details: {} },
+          geoResult: { score: audit.geo_score, issues: [], details: {} },
+          accessResult: { score: audit.access_score, issues: [], details: {} },
+          recommendations: recommendations.map((r: any, index: number) => ({
+            id: r.id || String(index),
+            problem: r.problem,
+            reason: r.reason,
+            priority: r.priority,
+            impact: r.impact,
+            difficulty: r.difficulty,
+            confidence: r.confidence,
+            expectedGain: r.impact,
+            category: r.category,
+          })),
+          technologyStack: audit.technology_stack || {
+            framework: "Unknown",
+            languages: [],
+            analytics: [],
+            cdns: [],
+            libraries: [],
+            meta: {},
+          },
+          websiteUnderstanding: audit.website_understanding || {},
+          lighthouseScores: audit.lighthouse_scores || {},
+        };
+
+        // Complete
+        send({
+          status: "complete",
+          progress: 100,
+          message: "Analysis complete!",
+          projectId: project.id,
+          auditId: audit.id,
+          result: fullAnalysisResult,
+          reports: generatedReportsList,
+        });
       } catch (err) {
         console.error("[PDF Engine Error]", err);
+        // Complete even if PDF generation failed
+        send({
+          status: "complete",
+          progress: 100,
+          message: "Analysis complete (with PDF errors)!",
+          projectId: project.id,
+          auditId: audit.id,
+        });
       }
-
-      // Complete
-      send({
-        status: "complete",
-        progress: 100,
-        message: "Analysis complete!",
-        projectId: project.id,
-        auditId: audit.id,
-      });
     } catch (error) {
       console.error("[Analysis Error]", error);
       send({

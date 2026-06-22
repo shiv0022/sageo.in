@@ -22,9 +22,21 @@ export default function ReportsPage() {
         if (res.ok) {
           const data = await res.json();
           setReports(data);
+          // Sync database reports to localStorage
+          localStorage.setItem("latest_reports", JSON.stringify(data));
+        } else {
+          // Fallback to localStorage if API returned an error (e.g. 404 on Vercel without Supabase)
+          const localData = localStorage.getItem("latest_reports");
+          if (localData) {
+            setReports(JSON.parse(localData));
+          }
         }
       } catch {
-        // No reports
+        // Fallback to localStorage on network error
+        const localData = localStorage.getItem("latest_reports");
+        if (localData) {
+          setReports(JSON.parse(localData));
+        }
       } finally {
         setLoading(false);
       }
