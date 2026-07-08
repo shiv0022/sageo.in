@@ -93,28 +93,54 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Try to load latest analysis from API
     async function loadLatest() {
+      // 1. Always load localStorage data first (instant, works on Vercel without Supabase)
+      let localResult: AnalysisResult | null = null;
+      try {
+        const localData = localStorage.getItem("latest_analysis");
+        if (localData) {
+          localResult = JSON.parse(localData);
+          setResult(localResult);
+        }
+      } catch {
+        // Corrupted localStorage, ignore
+      }
+
+      // 2. Try API for persistent database data
       try {
         const res = await fetch("/api/analysis/latest");
         if (res.ok) {
-          const data = await res.json();
-          setResult(data);
-          // Sync database data to localStorage
-          localStorage.setItem("latest_analysis", JSON.stringify(data));
-        } else {
-          // Fallback to localStorage if API returned an error (e.g. 404 on Vercel without Supabase)
-          const localData = localStorage.getItem("latest_analysis");
-          if (localData) {
-            setResult(JSON.parse(localData));
+          const apiData = await res.json();
+
+          // Check if API data has real scores (not empty InMemoryAdapter zeros)
+          const apiHasScores =
+            apiData?.audit &&
+            ((apiData.audit.seo_score || 0) +
+              (apiData.audit.aeo_score || 0) +
+              (apiData.audit.geo_score || 0) +
+              (apiData.audit.access_score || 0) > 0 ||
+              apiData.auditDocument?.scores?.overall > 0);
+
+          const localHasScores =
+            localResult?.audit &&
+            ((localResult.audit.seo_score || 0) +
+              (localResult.audit.aeo_score || 0) +
+              (localResult.audit.geo_score || 0) +
+              (localResult.audit.access_score || 0) > 0 ||
+              (localResult as any)?.auditDocument?.scores?.overall > 0);
+
+          if (apiHasScores) {
+            // API has real data (Supabase or same serverless instance) — use it
+            setResult(apiData);
+            localStorage.setItem("latest_analysis", JSON.stringify(apiData));
+          } else if (!localHasScores && apiData) {
+            // Neither has scores, but API returned something — use API as last resort
+            setResult(apiData);
           }
+          // else: localStorage has scores but API doesn't — keep localStorage (already set above)
         }
       } catch {
-        // Fallback to localStorage on network error
-        const localData = localStorage.getItem("latest_analysis");
-        if (localData) {
-          setResult(JSON.parse(localData));
-        }
+        // API failed — localStorage result (if any) is already set above
       } finally {
         setLoading(false);
       }
