@@ -19,11 +19,31 @@ export async function GET() {
 
     const issues = await db.getIssuesByAudit(latestAudit.id);
 
+    // Try loading the composed report containing full AuditDocument and crawlSnapshot
+    let auditDocument = null;
+    let crawlResult: any = { pages: [], url: latestProject.website_url, specialFiles: {}, sitemaps: [] };
+
+    try {
+      const fs = await import("fs");
+      const path = await import("path");
+      const filePath = path.join(process.cwd(), ".data", "composed-reports", `${latestAudit.id}.json`);
+      if (fs.existsSync(filePath)) {
+        const raw = fs.readFileSync(filePath, "utf-8");
+        const parsed = JSON.parse(raw);
+        auditDocument = parsed.document;
+        if (parsed.crawlSnapshot) {
+          crawlResult = parsed.crawlSnapshot;
+        }
+      }
+    } catch (err) {
+      console.warn("Failed to load composed report for latest analysis:", err);
+    }
+
     // Reconstruct analysis result from stored data
     const result = {
       project: latestProject,
       audit: latestAudit,
-      crawlResult: { pages: [], url: latestProject.website_url },
+      crawlResult: crawlResult,
       seoResult: { score: latestAudit.seo_score, issues: [], details: {} },
       aeoResult: { score: latestAudit.aeo_score, issues: [], details: {} },
       geoResult: { score: latestAudit.geo_score, issues: [], details: {} },
@@ -49,6 +69,7 @@ export async function GET() {
       },
       websiteUnderstanding: latestAudit.website_understanding || {},
       lighthouseScores: latestAudit.lighthouse_scores || {},
+      auditDocument
     };
 
     return NextResponse.json(result);

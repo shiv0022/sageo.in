@@ -4,9 +4,9 @@ import fs from "fs";
 import path from "path";
 
 // Mock environment to simulate production on Vercel without Supabase
-process.env.NODE_ENV = "production";
-delete process.env.NEXT_PUBLIC_SUPABASE_URL;
-delete process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+(process.env as any).NODE_ENV = "production";
+delete (process.env as any).NEXT_PUBLIC_SUPABASE_URL;
+delete (process.env as any).NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
 async function runTest() {
   console.log("--- STARTING VERCEL COMPATIBILITY TEST ---");
@@ -69,7 +69,7 @@ async function runTest() {
   };
   
   console.log("Generating report...");
-  const reportUrl = await generatePdfReport(pdfData, "full_master_report");
+  const reportUrl = await generatePdfReport(pdfData as any, "full_master_report");
   console.log("Generated Report URL:", reportUrl.substring(0, 100) + "...");
   
   // Check that the returned URL is a base64 Data URL

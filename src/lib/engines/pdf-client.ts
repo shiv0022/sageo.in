@@ -32,7 +32,16 @@ export async function generatePdfReportClient(
   });
 
   const { project, audit, seoResult, aeoResult, geoResult, accessResult, recommendations, technologyStack, competitorResult } = data;
-  const domain = new URL(project.website_url).hostname;
+  let domain = "";
+  try {
+    let urlStr = project?.website_url || "";
+    if (urlStr && !urlStr.startsWith("http://") && !urlStr.startsWith("https://")) {
+      urlStr = "https://" + urlStr;
+    }
+    domain = new URL(urlStr).hostname;
+  } catch {
+    domain = project?.website_url || "Sageo Platform";
+  }
   
   // Design values
   const pageHeight = doc.internal.pageSize.height;

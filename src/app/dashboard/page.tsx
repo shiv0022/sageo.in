@@ -174,17 +174,57 @@ export default function DashboardPage() {
   }
 
   // Data state
-  const issues = result?.recommendations?.map((r, i) => ({
-    id: r.id || String(i),
-    audit_id: result.audit.id,
-    category: r.category,
-    title: r.problem,
-    description: r.reason,
-    priority: r.priority,
-    impact: r.impact,
-    difficulty: r.difficulty,
-    confidence: r.confidence,
-  })) as Issue[] || [];
+  const auditDoc = result?.auditDocument;
+
+  const seoScore = auditDoc ? auditDoc.scores.seo : (result?.audit.seo_score || 0);
+  const aeoScore = auditDoc ? auditDoc.scores.aeo : (result?.audit.aeo_score || 0);
+  const geoScore = auditDoc ? auditDoc.scores.geo : (result?.audit.geo_score || 0);
+  const accessScore = auditDoc ? auditDoc.scores.access : (result?.audit.access_score || 0);
+  const securityScore = auditDoc ? auditDoc.scores.security : (result?.lighthouseScores?.bestPractices || 0);
+  const performanceScore = auditDoc ? auditDoc.scores.performance : (result?.lighthouseScores?.performance || 0);
+  const accessibilityScore = auditDoc ? auditDoc.scores.accessibility : (result?.lighthouseScores?.accessibility || 0);
+  const dbOverallScore = result?.audit
+    ? Math.round(
+        ((result.audit.seo_score || 0) +
+          (result.audit.aeo_score || 0) +
+          (result.audit.geo_score || 0) +
+          (result.audit.access_score || 0)) /
+          4
+      )
+    : 0;
+  const overallHealth = auditDoc ? auditDoc.scores.overall : dbOverallScore;
+
+  const techStackFramework = auditDoc ? auditDoc.discovery.framework : (result?.technologyStack?.framework || "Unknown");
+  const pagesCrawledCount = result?.crawlResult?.pages?.length || 0;
+
+  const schemasFoundCount = result?.crawlResult?.pages?.reduce(
+    (sum: number, p: any) => sum + (p.schemaMarkup?.length || 0),
+    0
+  ) || 0;
+
+  const issues = (auditDoc
+    ? auditDoc.recommendations.map((r: any, i: number) => ({
+        id: r.id || String(i),
+        audit_id: auditDoc.id,
+        category: r.frameworkContext ? "seo" as const : "access" as const,
+        title: r.problem,
+        description: r.reason,
+        priority: r.priority,
+        impact: r.impacts?.seo || r.impacts?.googleVisibility || "+5 SEO",
+        difficulty: r.difficulty,
+        confidence: r.confidenceScore,
+      }))
+    : (result?.recommendations?.map((r, i) => ({
+        id: r.id || String(i),
+        audit_id: result.audit.id,
+        category: r.category,
+        title: r.problem,
+        description: r.reason,
+        priority: r.priority,
+        impact: r.impact,
+        difficulty: r.difficulty,
+        confidence: r.confidence,
+      })) || [])) as Issue[];
 
   const criticalIssues = issues.filter(
     (i: Issue) => i.priority === "critical" || i.priority === "high"
@@ -240,22 +280,22 @@ export default function DashboardPage() {
           style={{ opacity: 0, animationDelay: "0.2s" }}
         >
           <ScoreRing
-            score={result?.audit.seo_score || 0}
+            score={seoScore}
             label="SEO Score"
             delay={200}
           />
           <ScoreRing
-            score={result?.audit.aeo_score || 0}
+            score={aeoScore}
             label="AEO Score"
             delay={400}
           />
           <ScoreRing
-            score={result?.audit.geo_score || 0}
+            score={geoScore}
             label="GEO Score"
             delay={600}
           />
           <ScoreRing
-            score={result?.audit.access_score || 0}
+            score={accessScore}
             label="Access Score"
             delay={800}
           />
@@ -280,18 +320,14 @@ export default function DashboardPage() {
           <StatCard
             icon={Code2}
             label="Tech Stack"
-            value={result?.technologyStack?.framework || "Unknown"}
+            value={techStackFramework}
             color="text-blue-500"
             delay={0.4}
           />
           <StatCard
             icon={TrendingUp}
-            label="Lighthouse SEO"
-            value={
-              result?.lighthouseScores?.seo
-                ? `${result.lighthouseScores.seo}/100`
-                : "N/A"
-            }
+            label="Website Health"
+            value={overallHealth ? `${overallHealth}/100` : "N/A"}
             color="text-green-500"
             delay={0.45}
           />
@@ -332,7 +368,7 @@ export default function DashboardPage() {
                     <div className="flex items-center justify-between text-sm">
                       <span className="text-gray-500">Framework</span>
                       <span className="font-medium">
-                        {result.technologyStack.framework}
+                        {techStackFramework}
                       </span>
                     </div>
                     {result.technologyStack.cms && (
@@ -413,29 +449,31 @@ export default function DashboardPage() {
                 <div className="flex items-center justify-between text-sm">
                   <span className="text-gray-500">Pages Crawled</span>
                   <span className="font-medium">
-                    {result?.crawlResult?.pages?.length || 0}
+                    {pagesCrawledCount}
                   </span>
                 </div>
                 <div className="flex items-center justify-between text-sm">
                   <span className="text-gray-500">Schemas Found</span>
                   <span className="font-medium">
-                    {result?.crawlResult?.pages?.reduce(
-                      (sum: number, p: { schemaMarkup: object[] }) =>
-                        sum + (p.schemaMarkup?.length || 0),
-                      0
-                    ) || 0}
+                    {schemasFoundCount}
                   </span>
                 </div>
                 <div className="flex items-center justify-between text-sm">
                   <span className="text-gray-500">Performance</span>
                   <span className="font-medium">
-                    {result?.lighthouseScores?.performance || "N/A"}/100
+                    {performanceScore}/100
                   </span>
                 </div>
                 <div className="flex items-center justify-between text-sm">
                   <span className="text-gray-500">Accessibility</span>
                   <span className="font-medium">
-                    {result?.lighthouseScores?.accessibility || "N/A"}/100
+                    {accessibilityScore}/100
+                  </span>
+                </div>
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-gray-500">Security</span>
+                  <span className="font-medium">
+                    {securityScore}/100
                   </span>
                 </div>
               </div>

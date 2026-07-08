@@ -285,6 +285,7 @@ export interface AnalysisResult {
   technologyStack: TechnologyStack;
   websiteUnderstanding: WebsiteUnderstanding;
   lighthouseScores: LighthouseScores;
+  auditDocument?: any;
 }
 
 // --- Analysis Status ---

@@ -87,14 +87,6 @@ function AnalyzeContent() {
   const [statusMessage, setStatusMessage] = useState("");
   const [analysisId, setAnalysisId] = useState<string | null>(null);
 
-  // Auto-start if URL param is present
-  useEffect(() => {
-    if (searchParams.get("url") && searchParams.get("autostart") === "true") {
-      handleStartAnalysis();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
   const toggleReport = (id: ReportType) => {
     setSelectedReports((prev) => {
       const next = new Set(prev);
@@ -182,6 +174,14 @@ function AnalyzeContent() {
       );
     }
   }, [websiteUrl, competitorUrl, githubUrl, selectedReports, router]);
+
+  // Auto-start if URL param is present
+  useEffect(() => {
+    if (searchParams.get("url") && searchParams.get("autostart") === "true") {
+      handleStartAnalysis();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const isAnalyzing = status !== "idle" && status !== "complete" && status !== "error";
 
