@@ -128,24 +128,25 @@ export async function POST(request: NextRequest) {
           meta: {},
         };
       }
-      await sleep(800);
 
-      // 4. Run Lighthouse
+      // 4. Run Lighthouse (with 5s timeout to avoid hanging on Vercel where Chrome is unavailable)
       send({ status: "running_lighthouse", progress: 30, message: "Running Lighthouse audit..." });
       let lighthouseScores;
       try {
-        lighthouseScores = await runLighthouse(websiteUrl);
+        const lighthousePromise = runLighthouse(websiteUrl);
+        const timeoutPromise = new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error("Lighthouse timeout (5s)")), 5000)
+        );
+        lighthouseScores = await Promise.race([lighthousePromise, timeoutPromise]);
         send({ status: "running_lighthouse", progress: 40, message: `Lighthouse complete: SEO ${lighthouseScores.seo}/100` });
       } catch (err) {
-        console.error("[Lighthouse Error]", err);
+        console.warn("[Lighthouse] Skipped:", err instanceof Error ? err.message : err);
         lighthouseScores = { seo: 0, performance: 0, accessibility: 0, bestPractices: 0 };
-        send({ status: "running_lighthouse", progress: 40, message: "Lighthouse skipped" });
+        send({ status: "running_lighthouse", progress: 40, message: "Lighthouse skipped (serverless mode)" });
       }
-      await sleep(800);
 
       // 5. Execute Registry Pipeline
       send({ status: "analyzing_seo", progress: 50, message: "Executing Advanced Intelligence Layer..." });
-      await sleep(600);
       
       let registryOutputs: any;
       try {
@@ -167,15 +168,15 @@ export async function POST(request: NextRequest) {
           }
         });
 
-        // Send sequential step updates to let client view detailed AEO/GEO/Access audits
+        // Send sequential step updates
         send({ status: "analyzing_seo", progress: 58, message: "Auditing Technical SEO & crawlability..." });
-        await sleep(600);
+        await sleep(100);
         send({ status: "analyzing_aeo", progress: 66, message: "Auditing Answer Engine Optimization (AEO)..." });
-        await sleep(600);
+        await sleep(100);
         send({ status: "analyzing_geo", progress: 74, message: "Scanning generative entity coverage (GEO)..." });
-        await sleep(600);
+        await sleep(100);
         send({ status: "analyzing_access", progress: 80, message: "Auditing security headers & Accessibility..." });
-        await sleep(600);
+        await sleep(100);
       } catch (err) {
         console.error("[Registry Pipeline Error]", err);
         throw err;
