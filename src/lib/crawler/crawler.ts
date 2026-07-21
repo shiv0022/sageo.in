@@ -159,46 +159,51 @@ async function fetchWithPlaywright(url: string, timeoutMs: number): Promise<{
   statusCode: number;
   headers: Record<string, string>;
 }> {
-  const { chromium } = await import("playwright");
-
-  const browser = await chromium.launch({
-    headless: true,
-    args: ["--no-sandbox", "--disable-setuid-sandbox"],
-  });
-
   try {
-    const context = await browser.newContext({
-      userAgent: USER_AGENT,
-      extraHTTPHeaders: {
-        "DNT": "1"
-      }
+    const { chromium } = await import("playwright");
+
+    const browser = await chromium.launch({
+      headless: true,
+      args: ["--no-sandbox", "--disable-setuid-sandbox"],
     });
 
-    const page = await context.newPage();
-    let statusCode = 200;
-    let headers: Record<string, string> = {};
+    try {
+      const context = await browser.newContext({
+        userAgent: USER_AGENT,
+        extraHTTPHeaders: {
+          "DNT": "1"
+        }
+      });
 
-    page.on("response", (response) => {
-      if (response.url() === url || response.url() === url + "/") {
-        statusCode = response.status();
-        headers = response.headers();
-      }
-    });
+      const page = await context.newPage();
+      let statusCode = 200;
+      let headers: Record<string, string> = {};
 
-    await page.goto(url, { waitUntil: "networkidle", timeout: timeoutMs });
-    
-    // Wait slightly for post-load visual scripts
-    await page.waitForTimeout(1000);
+      page.on("response", (response) => {
+        if (response.url() === url || response.url() === url + "/") {
+          statusCode = response.status();
+          headers = response.headers();
+        }
+      });
 
-    const html = await page.content();
+      await page.goto(url, { waitUntil: "networkidle", timeout: timeoutMs });
+      
+      // Wait slightly for post-load visual scripts
+      await page.waitForTimeout(1000);
 
-    return {
-      html,
-      statusCode,
-      headers
-    };
-  } finally {
-    await browser.close();
+      const html = await page.content();
+
+      return {
+        html,
+        statusCode,
+        headers
+      };
+    } finally {
+      await browser.close();
+    }
+  } catch (err) {
+    logger.warn(`[Playwright] Launch/execution failed for ${url}, falling back to HTTP GET fetch:`, err);
+    return await fetchWithGet(url, timeoutMs);
   }
 }
 
