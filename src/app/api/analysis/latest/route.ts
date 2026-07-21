@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
+import { logger } from "@/lib/logging/logger";
 
 export async function GET() {
   try {
@@ -36,7 +37,7 @@ export async function GET() {
         }
       }
     } catch (err) {
-      console.warn("Failed to load composed report for latest analysis:", err);
+      logger.warn("Failed to load composed report for latest analysis:", err);
     }
 
     // Reconstruct analysis result from stored data
@@ -74,7 +75,7 @@ export async function GET() {
 
     return NextResponse.json(result);
   } catch (error) {
-    console.error("[API] Error fetching latest analysis:", error);
+    logger.error("[API] Error fetching latest analysis:", error);
     return NextResponse.json(
       { error: "Failed to fetch latest analysis" },
       { status: 500 }

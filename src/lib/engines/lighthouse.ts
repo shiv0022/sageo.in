@@ -2,7 +2,8 @@
 // Lighthouse Engine - Real Audits
 // ============================================================
 
-import type { LighthouseScores, CoreWebVitals } from "@/types";
+import type { LighthouseScores } from "@/types";
+import { logger } from "@/lib/logging/logger";
 
 /**
  * Run a real Lighthouse audit using chrome-launcher + lighthouse
@@ -13,14 +14,14 @@ export async function runLighthouse(url: string): Promise<LighthouseScores> {
   try {
     return await runLocalLighthouse(url);
   } catch (err) {
-    console.warn("[Lighthouse] Local audit failed, trying PageSpeed API:", err);
+    logger.warn("[Lighthouse] Local audit failed, trying PageSpeed API:", err);
   }
 
   // Fallback to PageSpeed Insights API
   try {
     return await runPageSpeedInsights(url);
   } catch (err) {
-    console.error("[Lighthouse] PageSpeed API also failed:", err);
+    logger.error("[Lighthouse] PageSpeed API also failed:", err);
     throw new Error("Lighthouse audit failed. Ensure Chrome is installed or provide a PAGESPEED_API_KEY.");
   }
 }
@@ -33,7 +34,14 @@ async function runLocalLighthouse(url: string): Promise<LighthouseScores> {
   const chromeLauncher = await import("chrome-launcher");
 
   const chrome = await chromeLauncher.launch({
-    chromeFlags: ["--headless", "--no-sandbox", "--disable-gpu"],
+    chromeFlags: [
+      "--headless=new",
+      "--no-sandbox",
+      "--disable-gpu",
+      "--disable-software-rasterizer",
+      "--disable-extensions",
+      "--mute-audio"
+    ],
   });
 
   try {
@@ -75,7 +83,7 @@ async function runLocalLighthouse(url: string): Promise<LighthouseScores> {
     try {
       await chrome.kill();
     } catch (killErr) {
-      console.warn("[Lighthouse] Warning cleaning up Chrome launcher:", killErr);
+      logger.warn("[Lighthouse] Warning cleaning up Chrome launcher:", killErr);
     }
   }
 }

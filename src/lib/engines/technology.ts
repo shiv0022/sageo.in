@@ -1,5 +1,4 @@
 import { IEngine, IEngineContext, IEngineResult } from "@/lib/interfaces";
-import { IRecommendation } from "@/types/domain";
 import { logger } from "@/lib/logging/logger";
 
 interface TechSignature {

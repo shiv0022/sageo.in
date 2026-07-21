@@ -6,7 +6,6 @@ import { detectTechnology } from "@/lib/engines/technology";
 import { runLighthouse } from "@/lib/engines/lighthouse";
 import { engineRegistry } from "@/lib/engines/registry";
 import { analyzeCompetitor } from "@/lib/engines/competitor";
-import { mergeAndPrioritizeRecommendations } from "@/lib/engines/recommendation";
 import { validationEngine } from "@/lib/engines/validation";
 import { knowledgeBaseEngine } from "@/lib/engines/knowledge-base";
 import { trustEngine } from "@/lib/engines/trust";
@@ -14,11 +13,12 @@ import { opportunityEngine } from "@/lib/engines/opportunity";
 import { reportComposer } from "@/lib/engines/report-composer";
 import { qualityAssuranceEngine } from "@/lib/engines/qa";
 import { generatePdfReport } from "@/lib/engines/pdf";
+import { rulesEngine } from "@/lib/knowledge-base";
+import { flattenEngineFindings } from "@/lib/knowledge-base/flatten-findings";
+import { logger } from "@/lib/logging/logger";
 
 export const maxDuration = 300; // 5 minute timeout for analysis
 export const dynamic = "force-dynamic";
-
-const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 // SSE helper
 function createSSEStream() {
@@ -57,7 +57,16 @@ function createSSEStream() {
 }
 
 export async function POST(request: NextRequest) {
-  const body = await request.json();
+  let body: any;
+  try {
+    body = await request.json();
+  } catch {
+    return new Response(JSON.stringify({ error: "Invalid JSON body" }), {
+      status: 400,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+
   const {
     websiteUrl,
     competitorUrl,
@@ -72,6 +81,20 @@ export async function POST(request: NextRequest) {
 
   if (!websiteUrl) {
     return new Response(JSON.stringify({ error: "Website URL is required" }), {
+      status: 400,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+
+  // Validate URL format
+  let normalizedUrl = websiteUrl;
+  if (!normalizedUrl.startsWith("http://") && !normalizedUrl.startsWith("https://")) {
+    normalizedUrl = "https://" + normalizedUrl;
+  }
+  try {
+    new URL(normalizedUrl);
+  } catch {
+    return new Response(JSON.stringify({ error: "Invalid URL format. Please provide a valid website URL." }), {
       status: 400,
       headers: { "Content-Type": "application/json" },
     });
@@ -100,7 +123,7 @@ export async function POST(request: NextRequest) {
         crawlResult = await crawlWebsite(websiteUrl);
         send({ status: "crawling", progress: 20, message: `Crawled ${crawlResult.pages.length} pages` });
       } catch (err) {
-        console.error("[Crawl Error]", err);
+        logger.error("[Crawl Error]", err);
         crawlResult = {
           id: `fallback-${Date.now()}`,
           url: websiteUrl,
@@ -128,21 +151,16 @@ export async function POST(request: NextRequest) {
           meta: {},
         };
       }
-
-      // 4. Run Lighthouse (with 5s timeout to avoid hanging on Vercel where Chrome is unavailable)
+      // 4. Run Lighthouse
       send({ status: "running_lighthouse", progress: 30, message: "Running Lighthouse audit..." });
       let lighthouseScores;
       try {
-        const lighthousePromise = runLighthouse(websiteUrl);
-        const timeoutPromise = new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error("Lighthouse timeout (5s)")), 5000)
-        );
-        lighthouseScores = await Promise.race([lighthousePromise, timeoutPromise]);
+        lighthouseScores = await runLighthouse(websiteUrl);
         send({ status: "running_lighthouse", progress: 40, message: `Lighthouse complete: SEO ${lighthouseScores.seo}/100` });
       } catch (err) {
-        console.warn("[Lighthouse] Skipped:", err instanceof Error ? err.message : err);
+        logger.error("[Lighthouse Error]", err);
         lighthouseScores = { seo: 0, performance: 0, accessibility: 0, bestPractices: 0 };
-        send({ status: "running_lighthouse", progress: 40, message: "Lighthouse skipped (serverless mode)" });
+        send({ status: "running_lighthouse", progress: 40, message: "Lighthouse skipped" });
       }
 
       // 5. Execute Registry Pipeline
@@ -168,17 +186,13 @@ export async function POST(request: NextRequest) {
           }
         });
 
-        // Send sequential step updates
+        // Send sequential step updates to let client view detailed AEO/GEO/Access audits
         send({ status: "analyzing_seo", progress: 58, message: "Auditing Technical SEO & crawlability..." });
-        await sleep(100);
         send({ status: "analyzing_aeo", progress: 66, message: "Auditing Answer Engine Optimization (AEO)..." });
-        await sleep(100);
         send({ status: "analyzing_geo", progress: 74, message: "Scanning generative entity coverage (GEO)..." });
-        await sleep(100);
         send({ status: "analyzing_access", progress: 80, message: "Auditing security headers & Accessibility..." });
-        await sleep(100);
       } catch (err) {
-        console.error("[Registry Pipeline Error]", err);
+        logger.error("[Registry Pipeline Error]", err);
         throw err;
       }
 
@@ -257,10 +271,11 @@ export async function POST(request: NextRequest) {
         }
       }
 
-      // 10. Generate and Validate recommendations using Sprints 3 & 4 prioritizer
+      // 10. Generate and Validate recommendations using Rules Engine
       send({ status: "generating_recommendations", progress: 85, message: "Compiling and validating recommendations..." });
-      await sleep(600);
-      const rawRecommendations = mergeAndPrioritizeRecommendations(Object.values(registryOutputs));
+      const flatFindings = flattenEngineFindings(registryOutputs);
+      const ruleMatches = rulesEngine.matchFindings(flatFindings);
+      const rawRecommendations = rulesEngine.toRecommendations(ruleMatches);
 
       const validatedRecs = validationEngine.validate(rawRecommendations);
 
@@ -302,7 +317,6 @@ export async function POST(request: NextRequest) {
           })
         );
       }
-      await sleep(800);
 
       // 12. Compile Knowledge Base AuditDocument using the real database audit.id
       const mockContext = {
@@ -351,11 +365,8 @@ export async function POST(request: NextRequest) {
         if (!fs.existsSync(reportsDir)) {
           fs.mkdirSync(reportsDir, { recursive: true });
         }
-        console.log(`[DEBUG PERSISTENCE] audit.id: ${audit.id}`);
-        console.log(`[DEBUG PERSISTENCE] auditDocument.id: ${auditDoc.id}`);
-        console.log(`[DEBUG PERSISTENCE] output filename: ${audit.id}.json`);
-        console.log(`[DEBUG PERSISTENCE] output filename: ${audit.id}.md`);
-        console.log(`[DEBUG PERSISTENCE] output filename: ${audit.id}_suggestions.json`);
+        logger.debug(`[PERSISTENCE] audit.id: ${audit.id}`);
+        logger.debug(`[PERSISTENCE] auditDocument.id: ${auditDoc.id}`);
         
         fs.writeFileSync(path.join(reportsDir, `${audit.id}.json`), composedJson, "utf-8");
         fs.writeFileSync(path.join(reportsDir, `${audit.id}.md`), composedMarkdown, "utf-8");
@@ -366,7 +377,7 @@ export async function POST(request: NextRequest) {
         fs.writeFileSync(path.join(reportsDir, `${audit.id}_blueprint.md`), aiBlueprint, "utf-8");
         fs.writeFileSync(path.join(reportsDir, `${audit.id}_suggestions.json`), suggestions, "utf-8");
       } catch (fsErr) {
-        console.warn("Failed to write composed reports locally:", fsErr);
+        logger.warn("Failed to write composed reports locally:", fsErr);
       }
 
       // 15. Quality Assurance verification check
@@ -442,10 +453,10 @@ export async function POST(request: NextRequest) {
                 report_type: rType,
                 file_url: reportUrl,
               });
-              console.log(`[DEBUG PERSISTENCE] report.id: ${createdReport.id}`);
+              logger.debug(`[PERSISTENCE] report.id: ${createdReport.id}`);
               generatedReportsList.push(createdReport);
             } catch (pdfErr) {
-              console.warn(
+              logger.warn(
                 `[PDF Error] Server-side PDF generation failed for ${rType}. Registering client-side fallback URL.`,
                 pdfErr
               );
@@ -454,12 +465,12 @@ export async function POST(request: NextRequest) {
                 report_type: rType,
                 file_url: `client-pdf:${rType}`,
               });
-              console.log(`[DEBUG PERSISTENCE] report.id: ${createdReport.id}`);
+              logger.debug(`[PERSISTENCE] report.id: ${createdReport.id}`);
               generatedReportsList.push(createdReport);
             }
           }
         } catch (err) {
-          console.error("[PDF Engine Error] Failed to import or run PDF engine", err);
+          logger.error("[PDF Engine Error] Failed to import or run PDF engine", err);
           // Fall back to client-pdf for all requested reports
           for (const rType of reports) {
             try {
@@ -468,15 +479,15 @@ export async function POST(request: NextRequest) {
                 report_type: rType,
                 file_url: `client-pdf:${rType}`,
               });
-              console.log(`[DEBUG PERSISTENCE] report.id: ${createdReport.id}`);
+              logger.debug(`[PERSISTENCE] report.id: ${createdReport.id}`);
               generatedReportsList.push(createdReport);
             } catch (dbErr) {
-              console.error("[DB Error] Failed to create fallback report entry", dbErr);
+              logger.error("[DB Error] Failed to create fallback report entry", dbErr);
             }
           }
         }
       } else {
-        console.log(
+        logger.info(
           "[PDF] Skipping server-side PDF generation (stateless production mode, no Supabase credentials found). Registering client-side fallback URLs directly."
         );
         for (const rType of reports) {
@@ -488,7 +499,7 @@ export async function POST(request: NextRequest) {
             });
             generatedReportsList.push(createdReport);
           } catch (dbErr) {
-            console.error("[DB Error] Failed to create fallback report entry", dbErr);
+            logger.error("[DB Error] Failed to create fallback report entry", dbErr);
           }
         }
       }
@@ -504,7 +515,7 @@ export async function POST(request: NextRequest) {
         reports: generatedReportsList,
       });
     } catch (error) {
-      console.error("[Analysis Error]", error);
+      logger.error("[Analysis Error]", error);
       send({
         status: "error",
         progress: 0,

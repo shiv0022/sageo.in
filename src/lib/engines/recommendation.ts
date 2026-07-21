@@ -44,8 +44,7 @@ export function generateRecommendations(
   seoResult: any,
   aeoResult: any,
   geoResult: any,
-  accessResult: any,
-  competitorResult?: any
+  accessResult: any
 ): any[] {
   // Convert standard results to mock engine outputs for our new prioritizer
   const outputs = [

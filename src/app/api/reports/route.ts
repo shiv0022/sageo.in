@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
+import { logger } from "@/lib/logging/logger";
 
 export async function GET() {
   try {
@@ -21,7 +22,7 @@ export async function GET() {
     const reports = await db.getReportsByAudit(latestAudit.id);
     return NextResponse.json(reports);
   } catch (error) {
-    console.error("[API] Error fetching reports:", error);
+    logger.error("[API] Error fetching reports:", error);
     return NextResponse.json(
       { error: "Failed to fetch reports" },
       { status: 500 }

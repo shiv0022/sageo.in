@@ -8,6 +8,7 @@ import fs from "fs";
 import path from "path";
 import { createClient } from "@supabase/supabase-js";
 import type { ReportType, Project, Audit, SEOResult, AEOResult, GEOResult, AccessResult, CompetitorResult, Recommendation, TechnologyStack } from "@/types";
+import { logger } from "@/lib/logging/logger";
 
 interface PdfData {
   project: Project;
@@ -333,10 +334,10 @@ export async function generatePdfReport(
 
   if (supabaseUrl && supabaseAnonKey) {
     try {
-      console.log("[PDF] Attempting Supabase upload...");
+      logger.info("[PDF] Attempting Supabase upload...");
       const supabase = createClient(supabaseUrl, supabaseAnonKey);
       
-      const { data: uploadData, error: uploadError } = await supabase.storage
+      const { error: uploadError } = await supabase.storage
         .from("reports")
         .upload(filename, pdfBytes, {
           contentType: "application/pdf",
@@ -348,20 +349,20 @@ export async function generatePdfReport(
           .from("reports")
           .getPublicUrl(filename);
         if (urlData?.publicUrl) {
-          console.log("[PDF] Uploaded to Supabase:", urlData.publicUrl);
+          logger.info("[PDF] Uploaded to Supabase:", { publicUrl: urlData.publicUrl });
           return urlData.publicUrl;
         }
       } else {
-        console.warn("[PDF] Supabase upload failed:", uploadError.message);
+        logger.warn("[PDF] Supabase upload failed:", uploadError.message);
       }
     } catch (err) {
-      console.warn("[PDF] Supabase client failed:", err);
+      logger.warn("[PDF] Supabase client failed:", err);
     }
   }
 
   // Local / In-memory Fallback
   if (process.env.NODE_ENV === "development") {
-    console.log("[PDF] Falling back to local file storage (development mode).");
+    logger.info("[PDF] Falling back to local file storage (development mode).");
     const reportsDir = path.join(process.cwd(), "public", "reports");
     
     if (!fs.existsSync(reportsDir)) {
@@ -372,10 +373,10 @@ export async function generatePdfReport(
     fs.writeFileSync(filePath, Buffer.from(pdfBytes));
 
     const localUrl = `/reports/${filename}`;
-    console.log("[PDF] Local report generated at:", localUrl);
+    logger.info("[PDF] Local report generated at:", { localUrl });
     return localUrl;
   } else {
-    console.log("[PDF] Falling back to Base64 Data URL (production mode, no filesystem access).");
+    logger.info("[PDF] Falling back to Base64 Data URL (production mode, no filesystem access).");
     const base64String = Buffer.from(pdfBytes).toString("base64");
     return `data:application/pdf;base64,${base64String}`;
   }

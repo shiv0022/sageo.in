@@ -7,6 +7,7 @@ import { Project, Audit, Issue, Report } from "@/types";
 import { v4 as uuidv4 } from "uuid";
 import fs from "fs";
 import path from "path";
+import { logger } from "@/lib/logging/logger";
 
 // --- Storage Interface ---
 
@@ -377,14 +378,14 @@ export function getDb(): DatabaseAdapter {
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
   if (hasSupabase) {
-    console.log("[DB] Using Supabase adapter");
+    logger.info("[DB] Using Supabase adapter");
     _db = new SupabaseAdapter();
   } else {
     if (process.env.NODE_ENV === "development") {
-      console.log("[DB] Using local JSON adapter (no Supabase credentials found, development mode)");
+      logger.info("[DB] Using local JSON adapter (no Supabase credentials found, development mode)");
       _db = new LocalJsonAdapter();
     } else {
-      console.log("[DB] Using in-memory adapter (no Supabase credentials found, production mode)");
+      logger.info("[DB] Using in-memory adapter (no Supabase credentials found, production mode)");
       _db = new InMemoryAdapter();
     }
   }

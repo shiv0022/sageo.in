@@ -17,7 +17,6 @@ export class OpportunityEngine {
 
     // Rich Result Opportunities: missing schemas
     const richResultOpportunities: string[] = [];
-    const detectedSchemas = auditDoc.scores.seo > 0 ? ["Organization", "WebSite"] : [];
     
     const missingOrg = recs.some((r) => r.problem.toLowerCase().includes("organization schema"));
     if (missingOrg) richResultOpportunities.push("Organization Rich Snippet");

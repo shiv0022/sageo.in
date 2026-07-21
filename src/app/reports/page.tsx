@@ -10,6 +10,7 @@ import {
   FolderOpen,
 } from "lucide-react";
 import type { Report } from "@/types";
+import { logger } from "@/lib/logging/logger";
 
 export default function ReportsPage() {
   const [reports, setReports] = useState<Report[]>([]);
@@ -75,7 +76,7 @@ export default function ReportsPage() {
         const { generatePdfReportClient } = await import("@/lib/engines/pdf-client");
         await generatePdfReportClient(analysisResult, report.report_type as any);
       } catch (err) {
-        console.error("Failed to generate PDF on client:", err);
+        logger.error("Failed to generate PDF on client:", err);
         alert("Failed to generate PDF. Please try again.");
       } finally {
         setDownloading(null);

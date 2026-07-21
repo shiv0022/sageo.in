@@ -9,6 +9,7 @@ import type {
   HeadingData,
   ImageData,
 } from "@/types";
+import { logger } from "@/lib/logging/logger";
 
 /**
  * Crawl a website using Playwright for dynamic rendering
@@ -31,7 +32,7 @@ export async function crawlWebsite(url: string): Promise<CrawlResult> {
     statusCode = result.statusCode;
     headers = result.headers;
   } catch (err) {
-    console.warn("[Crawler] Playwright failed, falling back to fetch:", err);
+    logger.warn("[Crawler] Playwright failed, falling back to fetch:", err);
     // Fallback to fetch
     try {
       const result = await crawlWithFetch(normalizedUrl);
@@ -39,7 +40,7 @@ export async function crawlWebsite(url: string): Promise<CrawlResult> {
       statusCode = result.statusCode;
       headers = result.headers;
     } catch (fetchErr) {
-      console.error("[Crawler] Fetch also failed:", fetchErr);
+      logger.error("[Crawler] Fetch also failed:", fetchErr);
       throw new Error(`Failed to crawl ${url}`);
     }
   }

@@ -1,4 +1,4 @@
-import { IAuditDocument, IRecommendation } from "@/types/domain";
+import { IAuditDocument } from "@/types/domain";
 
 export interface IDashboardData {
   overallScore: number;
@@ -257,6 +257,24 @@ Key Actions:
         }
         md += `\n`;
       });
+    }
+
+    if (opportunityReport) {
+      md += `## 4. Growth & Citation Opportunities\n`;
+      if (opportunityReport.richResultOpportunities?.length > 0) {
+        md += `### Rich Results:\n`;
+        opportunityReport.richResultOpportunities.forEach((opp: string) => {
+          md += `- ${opp}\n`;
+        });
+        md += `\n`;
+      }
+      if (opportunityReport.aiCitationOpportunities?.length > 0) {
+        md += `### AI Citation Opportunities:\n`;
+        opportunityReport.aiCitationOpportunities.forEach((opp: string) => {
+          md += `- ${opp}\n`;
+        });
+        md += `\n`;
+      }
     }
 
     return md;

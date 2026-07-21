@@ -385,7 +385,7 @@ export async function crawlWebsite(
   }
 
   // 4. In parallel, fetch special files and configs on origin
-  const [llmsTxt, humansTxt, securityTxt, adsTxt, manifestJson, rssXml, favicon] = await Promise.all([
+  const [llmsTxt, humansTxt, securityTxt, adsTxt] = await Promise.all([
     fetchSpecialFile(origin, "/llms.txt", crawlConfig.timeoutMs),
     fetchSpecialFile(origin, "/humans.txt", crawlConfig.timeoutMs),
     fetchSpecialFile(origin, "/security.txt", crawlConfig.timeoutMs),

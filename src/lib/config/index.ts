@@ -32,14 +32,14 @@ class ConfigurationSystem {
   private loadConfiguration(): void {
     try {
       const environment = (process.env.NODE_ENV || "development") as IGlobalConfig["environment"];
-      const defaultAiProvider = (process.env.DEFAULT_AI_PROVIDER || "gemini") as IGlobalConfig["defaultAiProvider"];
+      const defaultAiProvider = "gemini" as IGlobalConfig["defaultAiProvider"];
 
       const maxDepth = this.parseEnvInt("CRAWL_MAX_DEPTH", 3);
       const maxPages = this.parseEnvInt("CRAWL_MAX_PAGES", 10);
       const timeoutMs = this.parseEnvInt("CRAWL_TIMEOUT_MS", 30000);
 
-      const dashboardMode = (process.env.DEFAULT_DASHBOARD_MODE || "beginner") as "beginner" | "advanced";
-      const dashboardTheme = (process.env.DEFAULT_DASHBOARD_THEME || "dark") as "light" | "dark";
+      const dashboardMode = "beginner" as "beginner" | "advanced";
+      const dashboardTheme = "dark" as "light" | "dark";
 
       const enableAiConsultant = this.parseEnvBool("FEATURE_ENABLE_AI_CONSULTANT", true);
       const enableCompetitorAnalysis = this.parseEnvBool("FEATURE_ENABLE_COMPETITOR_ANALYSIS", true);

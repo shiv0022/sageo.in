@@ -8,9 +8,8 @@ import type {
   WebsiteUnderstanding,
   ContentSuggestions,
   CompetitorResult,
-  Recommendation,
-  Issue,
 } from "@/types";
+import { logger } from "@/lib/logging/logger";
 
 // Initialize Gemini Client if API key is provided
 let _ai: GoogleGenerativeAI | null = null;
@@ -19,14 +18,14 @@ function getAiClient() {
   if (_ai) return _ai;
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
-    console.log("[Gemini] API Key not found, using Mock fallback engines.");
+    logger.info("[Gemini] API Key not found, using Mock fallback engines.");
     return null;
   }
   try {
     _ai = new GoogleGenerativeAI(apiKey);
     return _ai;
   } catch (err) {
-    console.error("[Gemini] Failed to initialize GoogleGenerativeAI client:", err);
+    logger.error("[Gemini] Failed to initialize GoogleGenerativeAI client:", err);
     return null;
   }
 }
@@ -83,7 +82,7 @@ export async function generateWebsiteUnderstanding(
         return JSON.parse(cleanJsonString(text)) as WebsiteUnderstanding;
       }
     } catch (err) {
-      console.error("[Gemini] Failed to generate website understanding:", err);
+      logger.error("[Gemini] Failed to generate website understanding:", err);
     }
   }
 
@@ -142,7 +141,7 @@ export async function generateContentSuggestions(
         return JSON.parse(cleanJsonString(text)) as ContentSuggestions;
       }
     } catch (err) {
-      console.error("[Gemini] Failed to generate content suggestions:", err);
+      logger.error("[Gemini] Failed to generate content suggestions:", err);
     }
   }
 
@@ -214,7 +213,7 @@ export async function generateCompetitorComparison(
         return JSON.parse(cleanJsonString(text)) as CompetitorResult;
       }
     } catch (err) {
-      console.error("[Gemini] Failed to generate competitor comparison:", err);
+      logger.error("[Gemini] Failed to generate competitor comparison:", err);
     }
   }
 
